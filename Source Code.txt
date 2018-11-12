@@ -2,7 +2,7 @@
  *Authors: Luke B., Ryan P. & Will S.
  *Version_Date:1_9/23/2018 (Base/Bluetooth)
  *Version_Date:2_11/12/2018 (Ultrasonic)
- *
+ *Version_Date:
  */
 
 //Include Files
@@ -55,7 +55,6 @@ void configUltrasonic(void);
 void usInputInt(void);
 void sendUltrasonic(void);
 void receiveUltrasonic(void);
-void setup(void);
 
 int main(void)
 {
@@ -74,6 +73,7 @@ int main(void)
     GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, RED_LED|BLUE_LED|GREEN_LED);
 
     configUART();
+    configUltrasonic();
 
     /*while (count < 10)
     {
@@ -159,10 +159,9 @@ void usInputInt(void)
 
 void sendUltrasonic(void)
 {
-
-    GPIOPinWrite(GPIO_PORTA_BASE, GPIO_PIN_3, GPIO_PIN_3);
     GPIOPinWrite(GPIO_PORTF_BASE, BLUE_LED, BLUE_LED);
+    GPIOPinWrite(GPIO_PORTA_BASE, GPIO_PIN_3, GPIO_PIN_3);
     SysCtlDelay(400/3); //delay for 10us
     GPIOPinWrite(GPIO_PORTA_BASE, GPIO_PIN_3, ~GPIO_PIN_3);
-
+    GPIOPinWrite(GPIO_PORTF_BASE, BLUE_LED, 0);
 }
