@@ -1,0 +1,199 @@
+/*Senior Project
+ *Authors: Luke B., Ryan P. & Will S.
+ *Version_Date:1_9/23/2018 (Base/Bluetooth)
+ *Version_Date:2_11/12/2018 (Ultrasonic)
+ *
+ */
+
+//Include Files
+#include <stdint.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
+//#include "tm4c123gh6pm.h"
+#include "inc/hw_ints.h"
+#include "inc/hw_memmap.h"
+#include "inc/hw_timer.h"
+#include "inc/hw_types.h"
+
+#include "driverlib/adc.h"
+#include "driverlib/debug.h"
+#include "driverlib/fpu.h"
+#include "driverlib/gpio.h"
+#include "driverlib/interrupt.h"
+#include "driverlib/pin_map.h"
+#include "driverlib/rom.h"
+#include "driverlib/sysctl.h"
+#include "driverlib/systick.h"
+#include "driverlib/timer.h"
+#include "driverlib/uart.h"
+
+#include "utils/uartstdio.h"
+
+
+#define RED_LED            GPIO_PIN_1  // PF1
+#define GREEN_LED          GPIO_PIN_3  // PF2
+#define BLUE_LED           GPIO_PIN_2  // PF3
+
+//Internal Delay
+uint32_t ui32Loop;
+uint32_t MaxDelay = 200000;
+uint8_t count = 0;
+uint16_t i = 0;
+
+uint8_t RedLedToggle = 0;
+uint8_t GreenLedToggle = 0;
+uint8_t BlueLedToggle = 0;
+
+volatile uint32_t pulse=0;
+volatile uint8_t echowait=0;
+
+char string[50] = "Hi Will and Luke.";
+char pulseString[50];
+
+void configUART(void);
+void configUltrasonic(void);
+void usInputInt(void);
+void sendUltrasonic(void);
+void receiveUltrasonic(void);
+void setup(void);
+void intToAscii(uint32_t, char[50]);
+
+int main(void)
+{
+    //40 MHz PLL config (25 nsec)
+    SysCtlClockSet(SYSCTL_SYSDIV_5|SYSCTL_USE_PLL|SYSCTL_OSC_MAIN|SYSCTL_XTAL_16MHZ);
+
+    //Timer config
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_TIMER0);
+    TimerConfigure(TIMER0_BASE, TIMER_CFG_PERIODIC_UP);
+    TimerEnable(TIMER0_BASE,TIMER_A);
+
+    //UART and Distance Sensor Config Calls
+    configUART();
+    configUltrasonic();
+
+
+    //Send 10 strings to test the bluetooth communication
+    /*while (count < 10)
+    {
+        for (i = 0; i < 50; i++)
+        {
+            while(UARTBusy(UART3_BASE)) {;}
+            UARTCharPut(UART3_BASE, string[i]);
+        }
+        count++;
+    }//*/
+
+    while (1)
+    {
+        if (echowait != 1)
+        {
+            sendUltrasonic();
+        }
+        while (echowait != 0) {;}
+        pulse = (uint32_t)(0.025*pulse); //clock cycle correction
+        pulse = pulse / 58; //convert to cm
+        intToAscii(pulse, pulseString);
+        while(UARTBusy(UART3_BASE)) {;}
+        for (i = 0; i < 50; i++)
+        {
+            while(UARTBusy(UART3_BASE)) {;}
+            UARTCharPut(UART3_BASE, pulse);
+        }
+
+    }
+
+    return 0;
+}
+
+void configUART(void)
+{
+
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOC);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART3);
+    //GPIOPinConfigure(GPIO_PC6_U3RX);
+    GPIOPinConfigure(GPIO_PC7_U3TX);
+    /*HWREG(GPIO_PORTC_BASE + GPIO_O_LOCK) = GPIO_LOCK_KEY;
+    HWREG(GPIO_PORTC_BASE + GPIO_O_CR) |= 0x06;
+    HWREG(GPIO_PORTC_BASE + GPIO_O_LOCK) = 0;
+    HWREG(GPIO_PORTC_BASE + GPIO_O_LOCK) = GPIO_LOCK_KEY;
+    HWREG(GPIO_PORTC_BASE + GPIO_O_CR) |= 0x07;
+    HWREG(GPIO_PORTC_BASE + GPIO_O_LOCK) = 0;*/
+    //GPIOPinTypeUART(GPIO_PORTC_BASE, GPIO_PIN_6 | GPIO_PIN_7);
+    GPIOPinTypeUART(GPIO_PORTC_BASE, GPIO_PIN_7);
+    while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOC))
+    {
+    }
+    UARTConfigSetExpClk(UART3_BASE, SysCtlClockGet(), 9600, (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
+}
+
+void configUltrasonic(void)
+{
+    //Trig pin config
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+    GPIOPinTypeGPIOOutput(GPIO_PORTA_BASE, GPIO_PIN_3);
+
+    //Echo pin config
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+    GPIOPinTypeGPIOOutput(GPIO_PORTA_BASE, GPIO_PIN_2);
+    GPIOIntEnable(GPIO_PORTA_BASE, GPIO_PIN_2);
+    GPIOIntTypeSet(GPIO_PORTA_BASE, GPIO_PIN_2, GPIO_BOTH_EDGES);
+    GPIOIntRegister(GPIO_PORTA_BASE,usInputInt);
+}
+
+void usInputInt(void)
+{
+    GPIOIntClear(GPIO_PORTA_BASE, GPIO_PIN_2); //int clear
+
+    if (GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_2) == GPIO_PIN_2)
+    {
+        RedLedToggle^= RED_LED;
+        GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, RedLedToggle);
+        HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
+        TimerEnable(TIMER0_BASE, TIMER_A);
+        echowait = 1;
+    }
+    else
+    {
+        pulse = TimerValueGet(TIMER0_BASE, TIMER_A);
+        TimerDisable(TIMER0_BASE, TIMER_A);
+        echowait=0;
+        RedLedToggle^= RED_LED;
+        GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, RedLedToggle);
+    }
+}
+
+void sendUltrasonic(void)
+{
+    BlueLedToggle ^= BLUE_LED;
+    GPIOPinWrite(GPIO_PORTF_BASE, BLUE_LED, BlueLedToggle);
+    GPIOPinWrite(GPIO_PORTA_BASE, GPIO_PIN_3, GPIO_PIN_3);
+    SysCtlDelay(400/3); //delay for 10us
+    BlueLedToggle ^= BLUE_LED;
+    GPIOPinWrite(GPIO_PORTF_BASE, BLUE_LED, BlueLedToggle);
+    GPIOPinWrite(GPIO_PORTA_BASE, GPIO_PIN_3, ~GPIO_PIN_3);
+}
+
+void intToAscii(uint32_t pulse, char pulseString[50])
+{
+    uint32_t number = pulse;
+    uint32_t i = 0;
+    uint32_t index = 0;
+    if(pulse == 0)
+    {
+        pulseString[0] = ' ';
+    }
+    while (number > 0)
+    {
+        number = number / 10;
+        i++; //
+    }
+    number = pulse;
+    while (number > 0)
+    {
+        pulseString[i] = (char)((number % 10) + 48);
+        number = number / 10;
+        index--;
+    }
+}
