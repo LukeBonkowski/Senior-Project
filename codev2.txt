@@ -49,7 +49,7 @@ volatile uint32_t pulse=0;
 volatile uint8_t echowait=0;
 
 char string[50] = "Hi Will and Luke.";
-char pulseString[50];
+char pulseString[8];
 
 void configUART(void);
 void configUltrasonic(void);
@@ -96,10 +96,10 @@ int main(void)
         pulse = pulse / 58; //convert to cm
         intToAscii(pulse, pulseString);
         while(UARTBusy(UART3_BASE)) {;}
-        for (i = 0; i < 50; i++)
+        for (i = 0; i < 8; i++)
         {
             while(UARTBusy(UART3_BASE)) {;}
-            UARTCharPut(UART3_BASE, pulse);
+            UARTCharPut(UART3_BASE, pulseString[i]);
         }
 
     }
@@ -175,11 +175,10 @@ void sendUltrasonic(void)
     GPIOPinWrite(GPIO_PORTA_BASE, GPIO_PIN_3, ~GPIO_PIN_3);
 }
 
-void intToAscii(uint32_t pulse, char pulseString[50])
+void intToAscii(uint32_t pulse, char pulseString[8])
 {
     uint32_t number = pulse;
-    uint32_t i = 0;
-    uint32_t index = 0;
+    uint8_t i = 0;
     if(pulse == 0)
     {
         pulseString[0] = ' ';
@@ -194,6 +193,6 @@ void intToAscii(uint32_t pulse, char pulseString[50])
     {
         pulseString[i] = (char)((number % 10) + 48);
         number = number / 10;
-        index--;
+        i--;
     }
 }
