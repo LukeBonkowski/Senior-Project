@@ -2,7 +2,7 @@
  *Authors: Luke B., Ryan P. & Will S.
  *Version_Date:1_9/23/2018 (Base/Bluetooth)
  *Version_Date:2_11/12/2018 (Ultrasonic)
- *
+ *Version_Date:3_1/22/2019 (Map/Bug fixes)
  */
 
 //Include Files
@@ -107,7 +107,7 @@ int main(void)
         count++;
     }//*/
 
-    sendMap();
+    //sendMap();
     while (1)
     {
         if (echowait != 1)
@@ -116,7 +116,7 @@ int main(void)
 
             sendUltrasonic();
         }
-        SysCtlDelay((400/3)*200000);
+        //SysCtlDelay((400/3)*200000);
         while (echowait != 0) {;}
 
         pulse = (uint32_t)(0.025*pulse); //clock cycle correction
@@ -128,6 +128,7 @@ int main(void)
             while(UARTBusy(UART3_BASE)) {;}
             UARTCharPut(UART3_BASE, pulseString[i]);
         }
+        memset(pulseString,0,sizeof(pulseString));
         while(UARTBusy(UART3_BASE)) {;}
         UARTCharPut(UART3_BASE, ' ');
         SysCtlPeripheralDisable(SYSCTL_PERIPH_GPIOA);
@@ -220,11 +221,12 @@ void intToAscii(char pulseString[8])
         i++; //
     }
     number = pulse;
+    //while (i > 0)
     while (number > 0)
-    {
-        pulseString[i - 1] = (char)((number % 10) + 48);
-        number = number / 10;
-        i--;
+        {
+            pulseString[i - 1] = (char)((number % 10) + 48);
+            number = number / 10;
+            i--;
     }
 }
 
