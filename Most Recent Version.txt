@@ -223,10 +223,10 @@ void intToAscii(char pulseString[8])
     number = pulse;
     //while (i > 0)
     while (number > 0)
-        {
-            pulseString[i - 1] = (char)((number % 10) + 48);
-            number = number / 10;
-            i--;
+    {
+		pulseString[i - 1] = (char)((number % 10) + 48);
+		number = number / 10;
+		i--;
     }
 }
 
