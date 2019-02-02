@@ -3,6 +3,7 @@
  *Version_Date:1_9/23/2018 (Base/Bluetooth)
  *Version_Date:2_11/12/2018 (Ultrasonic)
  *Version_Date:3_1/22/2019 (Map/Bug fixes)
+ *Version_Date:4_2/2/2019 (2nd Ultrasonic)
  */
 
 //Include Files
@@ -66,16 +67,19 @@ bool map[width][height]; //these values are static so they should default to 0
 
 
 void configUART(void);
-void configUltrasonic(void);
-void usInputInt(void);
-void sendUltrasonic(void);
-void receiveUltrasonic(void);
+void configUltrasonic1(void);
+void configUltrasonic2(void);
+void usInputInt1(void);
+void usInputInt2(void);
+void sendUltrasonic1(void);
+void receiveUltrasonic2(void);
 void setup(void);
 void intToAscii(char[8]);
 void sendMap(void);
 
 int main(void)
 {
+    uint8_t count = 0;
     //40 MHz PLL config (25 nsec)
     SysCtlClockSet(SYSCTL_SYSDIV_5|SYSCTL_USE_PLL|SYSCTL_OSC_MAIN|SYSCTL_XTAL_16MHZ);
 
@@ -90,7 +94,8 @@ int main(void)
     GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, RED_LED|BLUE_LED|GREEN_LED);
 
     configUART();
-    configUltrasonic();
+    configUltrasonic1();
+    configUltrasonic2();
 
 
     IntMasterEnable();
@@ -110,17 +115,24 @@ int main(void)
     //sendMap();
     while (1)
     {
-        if (echowait != 1)
+        //SysCtlDelay((400/3)*200000);
+        if (echowait != 1 && count == 0)
         {
             SysCtlDelay((400/3) * 100000); //delay for 1s
-
-            sendUltrasonic();
+            sendUltrasonic1();
+            count++;
         }
-        //SysCtlDelay((400/3)*200000);
+        else if (echowait != 1 && count == 1)
+        {
+            SysCtlDelay((400/3) * 100000); //delay for 1s
+            sendUltrasonic2();
+            count--;
+        }
+
         while (echowait != 0) {;}
 
         pulse = (uint32_t)(0.025*pulse); //clock cycle correction
-        pulse = pulse / 58; //convert to cm
+        pulse = (pulse / 58) - 1; //convert to cm
         intToAscii(pulseString);
         while(UARTBusy(UART3_BASE)) {;}
         for (i = 0; i < 8; i++)
@@ -130,11 +142,7 @@ int main(void)
         }
         memset(pulseString,0,sizeof(pulseString));
         while(UARTBusy(UART3_BASE)) {;}
-        UARTCharPut(UART3_BASE, ' ');
-        SysCtlPeripheralDisable(SYSCTL_PERIPH_GPIOA);
-        SysCtlDelay(200/3); //5us
-        configUltrasonic();
-        //*/
+        UARTCharPut(UART3_BASE, ' ');//*/
     }
 
     return 0;
@@ -161,7 +169,7 @@ void configUART(void)
     UARTConfigSetExpClk(UART3_BASE, SysCtlClockGet(), 9600, (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE | UART_CONFIG_PAR_NONE));
 }
 
-void configUltrasonic(void)
+void configUltrasonic1(void)
 {
     //Trig pin config
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
@@ -174,11 +182,11 @@ void configUltrasonic(void)
     GPIOPinTypeGPIOInput(GPIO_PORTA_BASE, GPIO_PIN_2);
     GPIOIntEnable(GPIO_PORTA_BASE, GPIO_PIN_2);
     GPIOIntTypeSet(GPIO_PORTA_BASE, GPIO_PIN_2, GPIO_BOTH_EDGES);
-    GPIOIntRegister(GPIO_PORTA_BASE,usInputInt);
+    GPIOIntRegister(GPIO_PORTA_BASE,usInputInt1);
     GPIOIntEnable(GPIO_PORTA_BASE, GPIO_INT_PIN_2);
 }
 
-void usInputInt(void)
+void usInputInt1(void)
 {
     GPIOIntClear(GPIO_PORTA_BASE, GPIO_PIN_2); //int clear
 
@@ -198,13 +206,55 @@ void usInputInt(void)
     }
 }
 
-void sendUltrasonic(void)
+void sendUltrasonic1(void)
 {
-    GPIOPinWrite(GPIO_PORTF_BASE, BLUE_LED, BLUE_LED);
     GPIOPinWrite(GPIO_PORTA_BASE, GPIO_PIN_3, GPIO_PIN_3);
     SysCtlDelay(400/3); //delay for 10us
     GPIOPinWrite(GPIO_PORTA_BASE, GPIO_PIN_3, ~GPIO_PIN_3);
-    GPIOPinWrite(GPIO_PORTF_BASE, BLUE_LED, 0);
+}
+
+void configUltrasonic2(void)
+{
+    //Trig pin config
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
+
+    GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE, GPIO_PIN_3);
+
+    //Echo pin config
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
+
+    GPIOPinTypeGPIOInput(GPIO_PORTD_BASE, GPIO_PIN_2);
+    GPIOIntEnable(GPIO_PORTD_BASE, GPIO_PIN_2);
+    GPIOIntTypeSet(GPIO_PORTD_BASE, GPIO_PIN_2, GPIO_BOTH_EDGES);
+    GPIOIntRegister(GPIO_PORTD_BASE,usInputInt2);
+    GPIOIntEnable(GPIO_PORTD_BASE, GPIO_INT_PIN_2);
+}
+
+void usInputInt2(void)
+{
+    GPIOIntClear(GPIO_PORTD_BASE, GPIO_PIN_2); //int clear
+
+    if (GPIOPinRead(GPIO_PORTD_BASE, GPIO_PIN_2) == GPIO_PIN_2)
+    {
+        GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, RED_LED);
+        HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
+        TimerEnable(TIMER0_BASE, TIMER_A);
+        echowait = 1;
+    }
+    else
+    {
+        pulse = TimerValueGet(TIMER0_BASE, TIMER_A);
+        TimerDisable(TIMER0_BASE, TIMER_A);
+        echowait=0;
+        GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, 0);
+    }
+}
+
+void sendUltrasonic2(void)
+{
+    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_3, GPIO_PIN_3);
+    SysCtlDelay(400/3); //delay for 10us
+    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_3, ~GPIO_PIN_3);
 }
 
 void intToAscii(char pulseString[8])
@@ -223,10 +273,10 @@ void intToAscii(char pulseString[8])
     number = pulse;
     //while (i > 0)
     while (number > 0)
-    {
-		pulseString[i - 1] = (char)((number % 10) + 48);
-		number = number / 10;
-		i--;
+        {
+            pulseString[i - 1] = (char)((number % 10) + 48);
+            number = number / 10;
+            i--;
     }
 }
 
