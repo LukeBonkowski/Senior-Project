@@ -115,16 +115,17 @@ int main(void)
     //sendMap();
     while (1)
     {
+        //For Delay (400/3) is 1 us because a delay is 3 cycle action and each clock cycle is 25 ns
         //SysCtlDelay((400/3)*200000);
         if (echowait != 1 && count == 0)
         {
-            SysCtlDelay((400/3) * 100000); //delay for 1s
+            SysCtlDelay((400/3) * 1000); //delay for some time
             sendUltrasonic1();
             count++;
         }
         else if (echowait != 1 && count == 1)
         {
-            SysCtlDelay((400/3) * 100000); //delay for 1s
+            SysCtlDelay((400/3) * 1000); //delay
             sendUltrasonic2();
             count--;
         }
@@ -141,8 +142,20 @@ int main(void)
             UARTCharPut(UART3_BASE, pulseString[i]);
         }
         memset(pulseString,0,sizeof(pulseString));
-        while(UARTBusy(UART3_BASE)) {;}
-        UARTCharPut(UART3_BASE, ' ');//*/
+       /* while(UARTBusy(UART3_BASE)) {;}
+        UARTCharPut(UART3_BASE, ' ');  //*/
+        if (count == 1)
+        {
+            while(UARTBusy(UART3_BASE)) {;}
+            UARTCharPut(UART3_BASE, ' ');//
+        }
+        else
+        {
+            while(UARTBusy(UART3_BASE)) {;}
+            UARTCharPut(UART3_BASE, (char)10);//  \r
+            while(UARTBusy(UART3_BASE)) {;}
+            UARTCharPut(UART3_BASE, (char)13);//  \n
+        }   //*/
     }
 
     return 0;
@@ -186,23 +199,23 @@ void configUltrasonic1(void)
     GPIOIntEnable(GPIO_PORTA_BASE, GPIO_INT_PIN_2);
 }
 
-void usInputInt1(void)
+void usInputInt1(void)  //number of cycles per instruction
 {
-    GPIOIntClear(GPIO_PORTA_BASE, GPIO_PIN_2); //int clear
+    GPIOIntClear(GPIO_PORTA_BASE, GPIO_PIN_2); //int clear   3
 
-    if (GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_2) == GPIO_PIN_2)
+    if (GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_2) == GPIO_PIN_2)// 5  
     {
-        GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, RED_LED);
+        //GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, RED_LED);
         HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
         TimerEnable(TIMER0_BASE, TIMER_A);
         echowait = 1;
     }
     else
     {
-        pulse = TimerValueGet(TIMER0_BASE, TIMER_A);
-        TimerDisable(TIMER0_BASE, TIMER_A);
-        echowait=0;
-        GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, 0);
+        pulse = TimerValueGet(TIMER0_BASE, TIMER_A);  //5
+        TimerDisable(TIMER0_BASE, TIMER_A);//  3
+        echowait=0;//  3
+        GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, 0); //  4
     }
 }
 
@@ -236,7 +249,7 @@ void usInputInt2(void)
 
     if (GPIOPinRead(GPIO_PORTD_BASE, GPIO_PIN_2) == GPIO_PIN_2)
     {
-        GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, RED_LED);
+        //GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, RED_LED);
         HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
         TimerEnable(TIMER0_BASE, TIMER_A);
         echowait = 1;
