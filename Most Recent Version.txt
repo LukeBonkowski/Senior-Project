@@ -5,6 +5,7 @@
  *Version_Date:3_1/22/2019 (Map/Bug fixes)
  *Version_Date:4_2/2/2019 (2nd Ultrasonic)
  *Version_Date:5_2/5/2019 (Formatting output)
+ *Version_Date:6_3/1/2019 (Pathing Part 1)
  */
 
 //Include Files
@@ -44,6 +45,13 @@ struct TwoBit
 };
 
 
+
+//Position Identifiers
+uint8_t xPosition = 50; //We are using one central point for the position so that we can save on memory even though we will need to do minor calculation for updating the map
+uint8_t yPosition = 0; //This may need to be changed if it isn't practical but starting at or near the bottom edge and orientating our maze appropriately will be our best bet.
+//Angular Identifier
+struct TwoBit Direction; // 00 = right, 01 = up, 10 = left, 11 = down.
+
 //Internal Delay
 uint32_t ui32Loop;
 uint32_t MaxDelay = 200000;
@@ -77,9 +85,18 @@ void receiveUltrasonic2(void);
 void setup(void);
 void intToAscii(char[8]);
 void sendMap(void);
+void updateMap(uint32_t, uint32_t);//This assumes that the first int is the sensor that is looking foreword and the second int is the sensor looking to the right.
+//Direction and movement
+int DirectionDecision();
+void RightTurn(void);
+void LeftTurn(void);
+
 
 int main(void)
 {
+    Direction.bitA = false;
+    Direction.bitB = true;
+
     uint8_t count = 0;
     //40 MHz PLL config (25 nsec)
     SysCtlClockSet(SYSCTL_SYSDIV_5|SYSCTL_USE_PLL|SYSCTL_OSC_MAIN|SYSCTL_XTAL_16MHZ);
@@ -112,8 +129,9 @@ int main(void)
         }
         count++;
     }//*/
-
-    //sendMap();
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
+    GPIOPinTypeGPIOOutput(GPIO_PORTB_BASE, GPIO_PIN_3);
+    GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_3, GPIO_PIN_3);
     while (1)
     {
         //For Delay (400/3) is 1 us because a delay is 3 cycle action and each clock cycle is 25 ns
@@ -204,7 +222,7 @@ void usInputInt1(void)  //number of cycles per instruction
 {
     GPIOIntClear(GPIO_PORTA_BASE, GPIO_PIN_2); //int clear   3
 
-    if (GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_2) == GPIO_PIN_2)// 5  
+    if (GPIOPinRead(GPIO_PORTA_BASE, GPIO_PIN_2) == GPIO_PIN_2)// 5
     {
         //GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, RED_LED);
         HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
@@ -323,6 +341,31 @@ void sendMap(void)
 
         }
         while(UARTBusy(UART3_BASE)) {;}
-        UARTCharPut(UART3_BASE, (char)13);
+        UARTCharPut(UART3_BASE, (char)10);//  \r
+        while(UARTBusy(UART3_BASE)) {;}
+        UARTCharPut(UART3_BASE, (char)13);//  \n
     }
 }
+/*
+void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
+{
+    int ForeSensorPulse / 2;
+    RightSensorPulse;
+
+}
+
+void RightTurn (void)
+{
+   //Do the function name
+}
+
+void LeftTurn (void)
+{
+
+}
+
+int DirectionDecision ()
+{
+
+}
+*/
