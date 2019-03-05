@@ -70,8 +70,8 @@ char pulseString[8];
 
 //Two Bit Map
 const uint8_t width = 100; //maximum value of 255; use uint32 if you want up to 65,536.
-const uint8_t height = 100;
-bool map[width][height]; //these values are static so they should default to 0
+const uint8_t height = 100; //note this is height in squares not cm's 
+struct TwoBit map[width][height]; //these values are static so they should default to 0
 
 
 
@@ -316,28 +316,38 @@ void sendMap(void)
 {
     uint16_t widthIndex;
     uint16_t heightIndex;
-    uint8_t currentNumber;
+    
 
-    map[0][0] = 1;
     for (heightIndex = 0; heightIndex < height; heightIndex++)
     {
         for (widthIndex = 0; widthIndex < width; widthIndex++)
         {
             currentNumber = map[widthIndex][heightIndex];
-            if (currentNumber == 0)
+            if (map[widthIndex][heightIndex].bitA == false)
             {
                 while(UARTBusy(UART3_BASE)) {;}
                 UARTCharPut(UART3_BASE, '0');
-                while(UARTBusy(UART3_BASE)) {;}
-                UARTCharPut(UART3_BASE, ',');
+                
             }
             else
             {
                 while(UARTBusy(UART3_BASE)) {;}
                 UARTCharPut(UART3_BASE, '1');
-                while(UARTBusy(UART3_BASE)) {;}
-                UARTCharPut(UART3_BASE, ',');
             }
+			if (map[widthIndex][heightIndex].bitB == false)
+			{
+				while(UARTBusy(UART3_BASE)) {;}
+                UARTCharPut(UART3_BASE, '0');
+				while(UARTBusy(UART3_BASE)) {;}
+                UARTCharPut(UART3_BASE, ',');
+			}
+			else
+			{
+				while(UARTBusy(UART3_BASE)) {;}
+                UARTCharPut(UART3_BASE, '1');
+				while(UARTBusy(UART3_BASE)) {;}
+                UARTCharPut(UART3_BASE, ',');
+			}
 
         }
         while(UARTBusy(UART3_BASE)) {;}
@@ -349,9 +359,26 @@ void sendMap(void)
 /*
 void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
 {
-    int ForeSensorPulse / 2;
-    RightSensorPulse;
-
+	int squaresAway  //how many squares away the wall found was
+	if(RightSensorPulse > 0)
+	{
+		int squaresAway = RightSensorPulse / 2;
+		for(int z = 1; z <= squaresAway; z++)
+		{
+			if(z != squaresAway)
+			{
+				map[][].bitA = false;
+			}
+		}
+		
+	}
+	else 
+		; //don't update because we got a bad value
+	if(ForeSensorPulse > 0)
+	{
+		int ForeSquares = ForeSensorPulse / 2;
+	}
+	map[][]
 }
 
 void RightTurn (void)
