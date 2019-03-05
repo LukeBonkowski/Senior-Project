@@ -5,9 +5,10 @@
  *Version_Date:3_1/22/2019 (Map/Bug fixes)
  *Version_Date:4_2/2/2019 (2nd Ultrasonic)
  *Version_Date:5_2/5/2019 (Formatting output)
- *Version_Date:6_3/1/2019 (Pathing Part 1)
+ *Version_Date:6_3/1/2019 (Pathing Part 1: Created functions)
+ *Version_Date:7_3/5/2019 (Pathing Part 2: UpdateMap Logic added, added comments, imporoved code readability, Two Sensor Data retrival per loop.)
  */
-
+ 
 //Include Files
 #include <stdint.h>
 #include <stdbool.h>
@@ -45,17 +46,22 @@ struct TwoBit
 };
 
 
-
 //Position Identifiers
 uint8_t xPosition = 50; //We are using one central point for the position so that we can save on memory even though we will need to do minor calculation for updating the map
 uint8_t yPosition = 0; //This may need to be changed if it isn't practical but starting at or near the bottom edge and orientating our maze appropriately will be our best bet.
+
+//Sensor Position Identifiers		These all use the assumption that the position is 01 or up.
+const uint8_t ForeSensorXOffset = 1;
+const uint8_t ForeSensorYOffset = 3;
+const uint8_t RightSensorXOffset = 2;
+const uint8_t RightSensorYOffset = 0;
+
 //Angular Identifier
 struct TwoBit Direction; // 00 = right, 01 = up, 10 = left, 11 = down.
 
 //Internal Delay
 uint32_t ui32Loop;
 uint32_t MaxDelay = 200000;
-uint8_t count = 0;
 uint16_t i = 0;
 
 uint8_t RedLedToggle = 0;
@@ -65,7 +71,6 @@ uint8_t BlueLedToggle = 0;
 volatile uint32_t pulse=0;
 volatile uint8_t echowait=0;
 
-char string[50] = "Hi Will and Luke.";
 char pulseString[8];
 
 //Two Bit Map
@@ -74,7 +79,7 @@ const uint8_t height = 100; //note this is height in squares not cm's
 struct TwoBit map[width][height]; //these values are static so they should default to 0
 
 
-
+//Function Prototypes
 void configUART(void);
 void configUltrasonic1(void);
 void configUltrasonic2(void);
@@ -84,20 +89,30 @@ void sendUltrasonic1(void);
 void receiveUltrasonic2(void);
 void setup(void);
 void intToAscii(char[8]);
+
+//Map Functions
 void sendMap(void);
 void updateMap(uint32_t, uint32_t);//This assumes that the first int is the sensor that is looking foreword and the second int is the sensor looking to the right.
-//Direction and movement
-int DirectionDecision();
+
+//Direction and movement functions
+int DirectionDecision(uint32_t, uint32_t);//This assumes that the first int is the sensor that is looking foreword and the second int is the sensor looking to the right.
 void RightTurn(void);
 void LeftTurn(void);
-
+void MoveForeword(void);
 
 int main(void)
 {
+	//Set Assumed Direction
     Direction.bitA = false;
     Direction.bitB = true;
 
+	//Seperate pulse variables
+	uint32_t RightSensorPulse = 0;
+	uint32_t ForeSensorPulse = 0;
+	
+	//This Tracks the Current Sensor
     uint8_t count = 0;
+	
     //40 MHz PLL config (25 nsec)
     SysCtlClockSet(SYSCTL_SYSDIV_5|SYSCTL_USE_PLL|SYSCTL_OSC_MAIN|SYSCTL_XTAL_16MHZ);
 
@@ -111,31 +126,27 @@ int main(void)
     //LED Configuration
     GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, RED_LED|BLUE_LED|GREEN_LED);
 
+	//PortConfig
     configUART();
     configUltrasonic1();
     configUltrasonic2();
 
-
+	//interrupt enable
     IntMasterEnable();
 
-    //GPIOPinWrite(GPIO_PORTF_BASE, GREEN_LED, GREEN_LED);
-    //Send 10 strings to test the bluetooth communication
-    /*while (count < 10)
-    {
-        for (i = 0; i < 50; i++)
-        {
-            while(UARTBusy(UART3_BASE)) {;}
-            UARTCharPut(UART3_BASE, string[i]);
-        }
-        count++;
-    }//*/
+	
+	// testing
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
     GPIOPinTypeGPIOOutput(GPIO_PORTB_BASE, GPIO_PIN_3);
     GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_3, GPIO_PIN_3);
+	// testing
+	
     while (1)
     {
         //For Delay (400/3) is 1 us because a delay is 3 cycle action and each clock cycle is 25 ns
         //SysCtlDelay((400/3)*200000);
+		
+		//Working Ultrasonic Code
         if (echowait != 1 && count == 0)
         {
             SysCtlDelay((400/3) * 1000); //delay for some time
@@ -148,25 +159,52 @@ int main(void)
             sendUltrasonic2();
             count--;
         }
-
-        while (echowait != 0) {;}
-
+		
+		while (echowait != 0) {;}
+		
         pulse = (uint32_t)(0.025*pulse); //clock cycle correction
-        pulse = (pulse / 58) - 1; //convert to cm
-        intToAscii(pulseString);
+        pulse = (pulse / 58) - 1; //convert to cm   	The -1 is to correct for where the sensor's actual measurement position
+		
+		//*/
+		/* Dual Sensor Data Retrival per loop 		DO NOT DELETE NEEDS TESTING
+		//Sensor Values Retrieval 
+		if (echowait != 1) //LABEL WHICH ULTRASONIC WHEN POSSIBLE
+		{
+            SysCtlDelay((400/3) * 1000); //delay for some time
+			sendUltrasonic1();
+		}
+		while (echowait != 0) {;}
+		
+		//MAY NEED TO CHANGE ASSUMED ULTRASONIC
+		RightSensorPulse = (uint32_t)(0.025 * pulse);
+		RightSensorPulse = (RightSensorPulse / 58) - 1; //convert to cm   	The -1 is to correct for where the sensor's actual measurement position
+		
+		if (echowait != 1)
+		{
+            SysCtlDelay((400/3) * 1000); //delay for some time
+			sendUltrasonic2();
+		}
+		while (echowait != 0) {;}
+		
+		ForeSensorPulse = (uint32_t)(0.025 * pulse);
+		ForeSensorPulse = (ForeSensorPulse / 58) - 1;
+		//*/
+		
+		//This is all for putty outputs and won't be needed in the end code
+        intToAscii(pulseString); //UART only takes characters and pulse is a uint32
         while(UARTBusy(UART3_BASE)) {;}
         for (i = 0; i < 8; i++)
         {
             while(UARTBusy(UART3_BASE)) {;}
             UARTCharPut(UART3_BASE, pulseString[i]);
         }
-        memset(pulseString,0,sizeof(pulseString));
-       /* while(UARTBusy(UART3_BASE)) {;}
-        UARTCharPut(UART3_BASE, ' ');  //*/
+        memset(pulseString,0,sizeof(pulseString)); //the array of characters need to be set to 0
+
+		//This is for spacing 
         if (count == 1)
         {
             while(UARTBusy(UART3_BASE)) {;}
-            UARTCharPut(UART3_BASE, ' ');//
+            UARTCharPut(UART3_BASE, ' ');
         }
         else
         {
@@ -288,7 +326,7 @@ void sendUltrasonic2(void)
     SysCtlDelay(400/3); //delay for 10us
     GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_3, ~GPIO_PIN_3);
 }
-
+ // Will be obsolete when we stop sending Real Pulse values
 void intToAscii(char pulseString[8])
 {
     int number = pulse;
@@ -314,20 +352,18 @@ void intToAscii(char pulseString[8])
 
 void sendMap(void)
 {
-    uint16_t widthIndex;
-    uint16_t heightIndex;
+    uint16_t widthIndex = 0;
+    uint16_t heightIndex = 0;
     
 
     for (heightIndex = 0; heightIndex < height; heightIndex++)
     {
         for (widthIndex = 0; widthIndex < width; widthIndex++)
         {
-            currentNumber = map[widthIndex][heightIndex];
             if (map[widthIndex][heightIndex].bitA == false)
             {
                 while(UARTBusy(UART3_BASE)) {;}
                 UARTCharPut(UART3_BASE, '0');
-                
             }
             else
             {
@@ -356,29 +392,154 @@ void sendMap(void)
         UARTCharPut(UART3_BASE, (char)13);//  \n
     }
 }
-/*
+
 void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
 {
 	int squaresAway  //how many squares away the wall found was
+	int z = 1;
 	if(RightSensorPulse > 0)
 	{
-		int squaresAway = RightSensorPulse / 2;
-		for(int z = 1; z <= squaresAway; z++)
+		squaresAway = RightSensorPulse / 2;
+	
+	
+		if(!position.bitA) //0?
 		{
-			if(z != squaresAway)
+			if(!position.bitB) //00 right
 			{
-				map[][].bitA = false;
+				for(z = 1; z <= squaresAway; z++)
+				{
+					if(z != squaresAway) //this square is empty
+					{
+						map[xPosition + RightSensorYOffset][yPosition - RightSensorYOffset].bitB = true;
+					}
+					else // this square has a wall
+					{
+						map[xPosition + RightSensorYOffset][yPosition - RightSensorYOffset].bitA = true;
+					}
+				}
+			}
+			else //01 Sensor Offset assumptions are correct
+			{
+				for(z = 1; z <= squaresAway; z++)
+				{
+					if(z != squaresAway) //this square is empty
+					{
+						map[xPosition + RightSensorXOffset][yPosition + RightSensorYOffset].bitB = true;
+					}
+					else // this square has a wall
+					{
+						map[xPosition + RightSensorXOffset][yPosition + RightSensorYOffset].bitA = true;
+					}
+				}
 			}
 		}
-		
+		else //1?
+		{
+			if(!position.bitB) //10 Left
+			{
+				for(z = 1; z <= squaresAway; z++)
+				{
+					if(z != squaresAway) //this square is empty
+					{
+						map[xPosition - RightSensorYOffset][yPosition + RightSensorYOffset].bitB = true;
+					}
+					else // this square has a wall
+					{
+						map[xPosition + RightSensorYOffset][yPosition - RightSensorYOffset].bitA = true;
+					}
+				}
+			}
+			else //11 Sensor Offsets are negated
+			{
+				for(z = 1; z <= squaresAway; z++)
+				{
+					if(z != squaresAway) //this square is empty
+					{
+						map[xPosition - RightSensorXOffset][yPosition - RightSensorYOffset].bitB = true;
+					}
+					else // this square has a wall
+					{
+						map[xPosition - RightSensorXOffset][yPosition - RightSensorYOffset].bitA = true;
+					}
+				}
+				
+			}
+		}
 	}
 	else 
 		; //don't update because we got a bad value
 	if(ForeSensorPulse > 0)
 	{
 		int ForeSquares = ForeSensorPulse / 2;
+			
+	
+		if(!position.bitA) //0?
+		{
+			if(!position.bitB) //00 right
+			{
+				for(z = 1; z <= squaresAway; z++)
+				{
+					if(z != squaresAway) //this square is empty
+					{
+						map[xPosition + ForeSensorYOffset][yPosition - ForeSensorYOffset].bitB = true;
+					}
+					else // this square has a wall
+					{
+						map[xPosition + ForeSensorYOffset][yPosition - ForeSensorYOffset].bitA = true;
+					}
+				}
+			}
+			else //01 Sensor Offset assumptions are correct
+			{
+				for(z = 1; z <= squaresAway; z++)
+				{
+					if(z != squaresAway) //this square is empty
+					{
+						map[xPosition + ForeSensorXOffset][yPosition + ForeSensorYOffset].bitB = true;
+					}
+					else // this square has a wall
+					{
+						map[xPosition + ForeSensorXOffset][yPosition + ForeSensorYOffset].bitA = true;
+					}
+				}
+			}
+		}
+		else //1?
+		{
+			if(!position.bitB) //10 Left
+			{
+				for(z = 1; z <= squaresAway; z++)
+				{
+					if(z != squaresAway) //this square is empty
+					{
+						map[xPosition - ForeSensorYOffset][yPosition + ForeSensorYOffset].bitB = true;
+					}
+					else // this square has a wall
+					{
+						map[xPosition + ForeSensorYOffset][yPosition - ForeSensorYOffset].bitA = true;
+					}
+				}
+			}
+			else //11 Sensor Offsets are negated
+			{
+				for(z = 1; z <= squaresAway; z++)
+				{
+					if(z != squaresAway) //this square is empty
+					{
+						map[xPosition - ForeSensorXOffset][yPosition - ForeSensorYOffset].bitB = true;
+					}
+					else // this square has a wall
+					{
+						map[xPosition - ForeSensorXOffset][yPosition - ForeSensorYOffset].bitA = true;
+					}
+				}
+				
+			}
+		}
+	
 	}
-	map[][]
+	else
+		; // do nothing because the Sensor got a bad value
 }
 
 void RightTurn (void)
@@ -388,11 +549,11 @@ void RightTurn (void)
 
 void LeftTurn (void)
 {
-
+	//do the function name
 }
 
-int DirectionDecision ()
+int DirectionDecision (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
 {
 
 }
-*/
+//*/
