@@ -64,6 +64,7 @@ uint32_t ui32Loop;
 uint32_t MaxDelay = 200000;
 uint16_t i = 0;
 
+//LED controllers
 uint8_t RedLedToggle = 0;
 uint8_t GreenLedToggle = 0;
 uint8_t BlueLedToggle = 0;
@@ -71,8 +72,12 @@ uint8_t BlueLedToggle = 0;
 volatile uint32_t pulse=0;
 volatile uint8_t echowait=0;
 
+//char array to send in UART
 char pulseString[8];
 
+//Turning Thresholds
+const uint8_t FOREWARDtURNtHRESHOLD = 20; //note this is 20 cm form the foreward sensor!
+const uint8_t RIGHTtURNtHRESHOLD = 25; //note this is in cm from the right sensor!
 //Two Bit Map
 const uint8_t width = 100; //maximum value of 255; use uint32 if you want up to 65,536.
 const uint8_t height = 100; //note this is height in squares not cm's
@@ -95,7 +100,7 @@ void sendMap(void);
 void updateMap(uint32_t, uint32_t);//This assumes that the first int is the sensor that is looking foreword and the second int is the sensor looking to the right.
 
 //Direction and movement functions
-int DirectionDecision(uint32_t, uint32_t);//This assumes that the first int is the sensor that is looking foreword and the second int is the sensor looking to the right.
+void DirectionDecision(uint32_t, uint32_t);//This assumes that the first int is the sensor that is looking foreword and the second int is the sensor looking to the right.
 void RightTurn(void);
 void LeftTurn(void);
 void MoveForeword(void);
@@ -411,11 +416,11 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition + RightSensorYOffset][yPosition - RightSensorYOffset].bitB = true;
+                        map[xPosition + RightSensorYOffset][yPosition - RightSensorYOffset - z].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition + RightSensorYOffset][yPosition - RightSensorYOffset].bitA = true;
+                        map[xPosition + RightSensorYOffset][yPosition - RightSensorYOffset - z].bitA = true;
                     }
                 }
             }
@@ -425,11 +430,11 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition + RightSensorXOffset][yPosition + RightSensorYOffset].bitB = true;
+                        map[xPosition + RightSensorXOffset + z][yPosition + RightSensorYOffset].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition + RightSensorXOffset][yPosition + RightSensorYOffset].bitA = true;
+                        map[xPosition + RightSensorXOffset + z][yPosition + RightSensorYOffset].bitA = true;
                     }
                 }
             }
@@ -442,25 +447,25 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition - RightSensorYOffset][yPosition + RightSensorYOffset].bitB = true;
+                        map[xPosition - RightSensorYOffset][yPosition + RightSensorXOffset + z].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition + RightSensorYOffset][yPosition - RightSensorYOffset].bitA = true;
+                        map[xPosition - RightSensorYOffset][yPosition + RightSensorXOffset + z].bitA = true;
                     }
                 }
             }
-            else //11 Sensor Offsets are negated
+            else //11 Backwards Sensor Offsets are negated
             {
                 for(z = 1; z <= squaresAway; z++)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition - RightSensorXOffset][yPosition - RightSensorYOffset].bitB = true;
+                        map[xPosition - RightSensorXOffset - z][yPosition - RightSensorYOffset].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition - RightSensorXOffset][yPosition - RightSensorYOffset].bitA = true;
+                        map[xPosition - RightSensorXOffset - z][yPosition - RightSensorYOffset].bitA = true;
                     }
                 }
 
@@ -471,7 +476,7 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
         ; //don't update because we got a bad value
     if(ForeSensorPulse > 0)
     {
-        int ForeSquares = ForeSensorPulse / 2;
+        int squaresAway = ForeSensorPulse / 2;
 
 
         if(!Direction.bitA) //0?
@@ -482,11 +487,11 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition + ForeSensorYOffset][yPosition - ForeSensorYOffset].bitB = true;
+                        map[xPosition - ForeSensorYOffset - z][yPosition + ForeSensorXOffset].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition + ForeSensorYOffset][yPosition - ForeSensorYOffset].bitA = true;
+                        map[xPosition - ForeSensorYOffset - z][yPosition + ForeSensorXOffset].bitA = true;
                     }
                 }
             }
@@ -496,11 +501,11 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition + ForeSensorXOffset][yPosition + ForeSensorYOffset].bitB = true;
+                        map[xPosition + ForeSensorXOffset][yPosition + ForeSensorYOffset + z].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition + ForeSensorXOffset][yPosition + ForeSensorYOffset].bitA = true;
+                        map[xPosition + ForeSensorXOffset][yPosition + ForeSensorYOffset + z].bitA = true;
                     }
                 }
             }
@@ -513,11 +518,11 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition - ForeSensorYOffset][yPosition + ForeSensorYOffset].bitB = true;
+                        map[xPosition + ForeSensorYOffset][yPosition - ForeSensorXOffset].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition + ForeSensorYOffset][yPosition - ForeSensorYOffset].bitA = true;
+                        map[xPosition + ForeSensorYOffset][yPosition - ForeSensorXOffset].bitA = true;
                     }
                 }
             }
@@ -527,11 +532,11 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition - ForeSensorXOffset][yPosition - ForeSensorYOffset].bitB = true;
+                        map[xPosition - ForeSensorXOffset][yPosition - ForeSensorYOffset - z].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition - ForeSensorXOffset][yPosition - ForeSensorYOffset].bitA = true;
+                        map[xPosition - ForeSensorXOffset][yPosition - ForeSensorYOffset - z].bitA = true;
                     }
                 }
 
@@ -553,8 +558,27 @@ void LeftTurn (void)
     //do the function name
 }
 
-int DirectionDecision (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
+/*	
+	this function should do 1 of 3 things
+	1. don't turn
+	2. turn left 
+	3. turn right 
+*/
+void DirectionDecision (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
 {
-
+	if(ForeSensorPulse > FOREWARDtURNtHRESHOLD) //this means that there isn't a wall within 20 cm of the foreward sensor
+	{
+		return; //don't turn because there isn't a wall in the way
+	}
+	else if(RightSensorPulse > RIGHTtURNtHRESHOLD) //therefore we can turn right because there isn't a wall too close to the right sensor
+	{
+		RightTurn();
+		return;
+	}
+	else //if we can't go straight and we can't turn right then we must be able to turn left.
+	{
+		LeftTurn();
+		return;
+	}
 }
 //*/
