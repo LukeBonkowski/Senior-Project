@@ -72,7 +72,8 @@ uint8_t BlueLedToggle = 0;
 
 //Ultrasonic variables
 volatile uint32_t pulse=0;
-volatile uint8_t echowait=0;
+volatile uint8_t echowait1=0;
+volatile uint8_t echowait2=0;
 
 //To Send with PUTTY
 char pulseString[8];
@@ -138,7 +139,7 @@ int main(void)
     configUltrasonic2();
 
     //Calabration Testing
-    //TestF1();
+    TestF1();
 
     //interrupt enable
     IntMasterEnable();
@@ -181,9 +182,19 @@ int main(void)
 
         RightSensorPulse = GetRightSensorData(); //aka ultrasonic 1
         RightSensorPulse = (RightSensorPulse / 58) - 1; //convert to cm     The -1 is to correct for where the sensor's actual measurement position
+        if (RightSensorPulse >900)
+        {
+            RightSensorPulse = 0;
+        }
+
 
         ForeSensorPulse = GetForeSensorData();  //aka ultrasonic 2
         ForeSensorPulse = (ForeSensorPulse / 58) - 1;
+        if (ForeSensorPulse > 900)
+        {
+            ForeSensorPulse = 0;
+        }
+
         //*/
 
         //This is all for putty outputs and won't be needed in the end code
@@ -258,13 +269,13 @@ void usInputInt1(void)  //number of cycles per instruction
         //GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, RED_LED);
         HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
         TimerEnable(TIMER0_BASE, TIMER_A);
-        echowait = 1;
+        echowait1 = 1;
     }
     else
     {
         pulse = TimerValueGet(TIMER0_BASE, TIMER_A);  //5
         TimerDisable(TIMER0_BASE, TIMER_A);//  3
-        echowait=0;//  3
+        echowait1=0;//  3
         GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, 0); //  4
     }
 }
@@ -302,13 +313,13 @@ void usInputInt2(void)
         //GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, RED_LED);
         HWREG(TIMER0_BASE + TIMER_O_TAV) = 0;
         TimerEnable(TIMER0_BASE, TIMER_A);
-        echowait = 1;
+        echowait2 = 1;
     }
     else
     {
         pulse = TimerValueGet(TIMER0_BASE, TIMER_A);
         TimerDisable(TIMER0_BASE, TIMER_A);
-        echowait=0;
+        echowait2 = 0;
         GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, 0);
     }
 }
@@ -406,11 +417,11 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition + RightSensorYOffset][yPosition - RightSensorYOffset].bitB = true;
+                        map[xPosition + RightSensorYOffset][yPosition - RightSensorYOffset - z].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition + RightSensorYOffset][yPosition - RightSensorYOffset].bitA = true;
+                        map[xPosition + RightSensorYOffset][yPosition - RightSensorYOffset - z].bitA = true;
                     }
                 }
             }
@@ -420,11 +431,11 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition + RightSensorXOffset][yPosition + RightSensorYOffset].bitB = true;
+                        map[xPosition + RightSensorXOffset + z][yPosition + RightSensorYOffset].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition + RightSensorXOffset][yPosition + RightSensorYOffset].bitA = true;
+                        map[xPosition + RightSensorXOffset + z][yPosition + RightSensorYOffset].bitA = true;
                     }
                 }
             }
@@ -437,25 +448,25 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition - RightSensorYOffset][yPosition + RightSensorYOffset].bitB = true;
+                        map[xPosition - RightSensorYOffset][yPosition + RightSensorXOffset + z].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition + RightSensorYOffset][yPosition - RightSensorYOffset].bitA = true;
+                        map[xPosition - RightSensorYOffset][yPosition + RightSensorXOffset + z].bitA = true;
                     }
                 }
             }
-            else //11 Sensor Offsets are negated
+            else //11 Backwards Sensor Offsets are negated
             {
                 for(z = 1; z <= squaresAway; z++)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition - RightSensorXOffset][yPosition - RightSensorYOffset].bitB = true;
+                        map[xPosition - RightSensorXOffset - z][yPosition - RightSensorYOffset].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition - RightSensorXOffset][yPosition - RightSensorYOffset].bitA = true;
+                        map[xPosition - RightSensorXOffset - z][yPosition - RightSensorYOffset].bitA = true;
                     }
                 }
 
@@ -466,7 +477,7 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
         ; //don't update because we got a bad value
     if(ForeSensorPulse > 0)
     {
-        int ForeSquares = ForeSensorPulse / 2;
+        int squaresAway = ForeSensorPulse / 2;
 
 
         if(!Direction.bitA) //0?
@@ -477,11 +488,11 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition + ForeSensorYOffset][yPosition - ForeSensorYOffset].bitB = true;
+                        map[xPosition + ForeSensorYOffset + z][yPosition - ForeSensorXOffset].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition + ForeSensorYOffset][yPosition - ForeSensorYOffset].bitA = true;
+                        map[xPosition + ForeSensorYOffset + z][yPosition - ForeSensorXOffset].bitA = true;
                     }
                 }
             }
@@ -491,11 +502,11 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition + ForeSensorXOffset][yPosition + ForeSensorYOffset].bitB = true;
+                        map[xPosition + ForeSensorXOffset][yPosition + ForeSensorYOffset + z].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition + ForeSensorXOffset][yPosition + ForeSensorYOffset].bitA = true;
+                        map[xPosition + ForeSensorXOffset][yPosition + ForeSensorYOffset + z].bitA = true;
                     }
                 }
             }
@@ -508,11 +519,11 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition - ForeSensorYOffset][yPosition + ForeSensorYOffset].bitB = true;
+                        map[xPosition - ForeSensorYOffset - z][yPosition + ForeSensorXOffset].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition + ForeSensorYOffset][yPosition - ForeSensorYOffset].bitA = true;
+                        map[xPosition - ForeSensorYOffset - z][yPosition + ForeSensorXOffset].bitA = true;
                     }
                 }
             }
@@ -522,11 +533,11 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
                 {
                     if(z != squaresAway) //this square is empty
                     {
-                        map[xPosition - ForeSensorXOffset][yPosition - ForeSensorYOffset].bitB = true;
+                        map[xPosition - ForeSensorXOffset][yPosition - ForeSensorYOffset - z].bitB = true;
                     }
                     else // this square has a wall
                     {
-                        map[xPosition - ForeSensorXOffset][yPosition - ForeSensorYOffset].bitA = true;
+                        map[xPosition - ForeSensorXOffset][yPosition - ForeSensorYOffset - z].bitA = true;
                     }
                 }
 
@@ -536,6 +547,31 @@ void updateMap (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
     }
     else
         ; // do nothing because the Sensor got a bad value
+}
+void MoveForeword()
+{
+    if(!Direction.bitA) //0?
+    {
+        if (!Direction.bitB) //00 Right
+        {
+
+        }
+        else //01 foreword
+        {
+
+        }
+    }
+    else // 1?
+    {
+        if (!Direction.bitB) //10 Left
+        {
+
+        }
+        else //11 Backward
+        {
+
+        }
+    }
 }
 
 void RightTurn (void)
@@ -555,49 +591,52 @@ int DirectionDecision (uint32_t ForeSensorPulse, uint32_t RightSensorPulse)
 //*/
 void TestF1()
 {
-    GPIOPinTypeGPIOOutput(GPIO_PORTC_BASE, GPIO_PIN_4);
-    GPIOPinTypeGPIOOutput(GPIO_PORTC_BASE, GPIO_PIN_5);
-    GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE, GPIO_PIN_6);
-    GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE, GPIO_PIN_7);
+    GPIOPinWrite(GPIO_PORTF_BASE, RED_LED, RED_LED);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOE);
+    GPIOPinTypeGPIOOutput(GPIO_PORTB_BASE, GPIO_PIN_3);
+    GPIOPinTypeGPIOOutput(GPIO_PORTB_BASE, GPIO_PIN_4);
+    GPIOPinTypeGPIOOutput(GPIO_PORTE_BASE, GPIO_PIN_3);
+    GPIOPinTypeGPIOOutput(GPIO_PORTE_BASE, GPIO_PIN_4);
     bool GO;
     while(true)
     {
         if (GO)
         {
-            GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_4, GPIO_PIN_4);
-            GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_5, GPIO_PIN_5);
-            GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_6, GPIO_PIN_6);
-            GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_7, GPIO_PIN_7);
-            SysCtlDelay((400/3)*2); //delay for
-            GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_4, ~GPIO_PIN_4);
-            GPIOPinWrite(GPIO_PORTC_BASE, GPIO_PIN_5, ~GPIO_PIN_5);
-            GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_6, ~GPIO_PIN_6);
-            GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_7, ~GPIO_PIN_7);
+            GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_3, GPIO_PIN_3);
+            GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_4, GPIO_PIN_4);
+            GPIOPinWrite(GPIO_PORTE_BASE, GPIO_PIN_3, GPIO_PIN_3);
+            GPIOPinWrite(GPIO_PORTE_BASE, GPIO_PIN_4, GPIO_PIN_4);
+            SysCtlDelay((400/3)*10000000); //delay for
+            GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_3, ~GPIO_PIN_3);
+            GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_4, ~GPIO_PIN_4);
+            GPIOPinWrite(GPIO_PORTE_BASE, GPIO_PIN_3, ~GPIO_PIN_3);
+            GPIOPinWrite(GPIO_PORTE_BASE, GPIO_PIN_4, ~GPIO_PIN_4);
             GO = false;
         }
     }
     return;
 }
 
-int GetForeSensorData()
+uint32_t GetForeSensorData()
 {
-    if (echowait != 1) //Ultrasonic 2
+    if (echowait2 != 1) //Ultrasonic 2
     {
         SysCtlDelay((400/3) * 100000); //delay for some time
         sendUltrasonic2();
     }
-    while (echowait != 0) {;}
+    while (echowait2 != 0) {;}
     return (uint32_t)(0.025 * pulse);
 }
 
-int GetRightSensorData()
+uint32_t GetRightSensorData()
 {
-    
-    if (echowait != 1) //Ultrasonic 1
+
+    if (echowait1 != 1) //Ultrasonic 1
     {
         SysCtlDelay((400/3) * 100000); //delay for some time
         sendUltrasonic1();
     }
-    while (echowait != 0) {;}
+    while (echowait1 != 0) {;}
     return (uint32_t)(0.025 * pulse);
 }
